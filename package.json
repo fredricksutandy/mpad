@@ -1,0 +1,53 @@
+{
+  "name": "mpad",
+  "version": "1.0.0",
+  "description": "Turn your mobile phone into a precision trackpad, keyboard, and presentation remote for PC",
+  "main": "server/index.ts",
+  "type": "module",
+  "scripts": {
+    "build:bridge": "\"C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe\" /nologo /optimize /r:System.Windows.Forms.dll,System.Drawing.dll /target:exe /out:server\\bin\\InputBridge.exe server\\native\\InputBridge.cs",
+    "build:client": "vite build",
+    "build:server": "tsc -p server/tsconfig.json",
+    "build": "npm run build:bridge && npm run build:client && npm run build:server",
+    "dev:client": "vite",
+    "dev:server": "tsx watch server/index.ts",
+    "dev": "npm run build:bridge && tsx server/index.ts",
+    "start": "node dist-server/index.js"
+  },
+  "keywords": [
+    "trackpad",
+    "touchpad",
+    "remote",
+    "mouse",
+    "keyboard",
+    "presentation-remote",
+    "mobile-trackpad"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "ip": "^2.0.1",
+    "lucide-react": "^0.400.0",
+    "qrcode-terminal": "^0.12.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/ip": "^1.1.3",
+    "@types/node": "^20.14.9",
+    "@types/qrcode-terminal": "^0.12.2",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/ws": "^8.5.10",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.39",
+    "tailwindcss": "^3.4.4",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.2",
+    "vite": "^5.3.1"
+  }
+}
