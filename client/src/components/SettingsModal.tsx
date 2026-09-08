@@ -118,6 +118,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               />
             </label>
 
+            {/* Physical Click Buttons Toggle */}
+            <label className="flex items-center justify-between cursor-pointer">
+              <div className="flex items-center gap-2">
+                <MousePointer className="w-4 h-4 text-brand-400" />
+                <div>
+                  <span className="font-semibold text-xs block">Show Physical Buttons</span>
+                  <span className="text-[11px] text-slate-400">Display Left, Mid, and Right click buttons</span>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.showPhysicalButtons}
+                onChange={(e) => updateSetting('showPhysicalButtons', e.target.checked)}
+                className="w-5 h-5 accent-brand-500 rounded cursor-pointer"
+              />
+            </label>
+
             {/* Haptic Feedback */}
             <label className="flex items-center justify-between cursor-pointer">
               <div className="flex items-center gap-2">

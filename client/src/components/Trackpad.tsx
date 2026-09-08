@@ -358,32 +358,34 @@ export const Trackpad: React.FC<TrackpadProps> = ({ settings, sendPacket }) => {
         ))}
       </div>
 
-      {/* Bottom Physical Buttons (Toggleable or Standard) */}
-      <div className="flex h-20 w-full bg-dark-900/90 border-t border-white/5 p-2 gap-2">
-        <button
-          onClick={() => handleButtonClick(1, 'light')}
-          className="flex-1 rounded-xl glass-btn flex flex-col items-center justify-center text-slate-300 active:text-white active:bg-brand-600/30"
-        >
-          <span className="text-sm font-semibold">Left Click</span>
-          <span className="text-[10px] text-slate-400/80">Tap / Select</span>
-        </button>
+      {/* Bottom Physical Buttons (Toggleable via Settings or Header) */}
+      {settings.showPhysicalButtons && (
+        <div className="flex h-20 w-full bg-dark-900/90 border-t border-white/5 p-2 gap-2 flex-shrink-0 animate-fade-in">
+          <button
+            onClick={() => handleButtonClick(1, 'light')}
+            className="flex-1 rounded-xl glass-btn flex flex-col items-center justify-center text-slate-300 active:text-white active:bg-brand-600/30"
+          >
+            <span className="text-sm font-semibold">Left Click</span>
+            <span className="text-[10px] text-slate-400/80">Tap / Select</span>
+          </button>
 
-        <button
-          onClick={() => handleButtonClick(3, 'light')}
-          className="w-16 rounded-xl glass-btn flex flex-col items-center justify-center text-slate-400 active:text-white"
-        >
-          <span className="text-xs font-semibold">Mid</span>
-          <span className="text-[9px] text-slate-500">Scroll</span>
-        </button>
+          <button
+            onClick={() => handleButtonClick(3, 'light')}
+            className="w-16 rounded-xl glass-btn flex flex-col items-center justify-center text-slate-400 active:text-white"
+          >
+            <span className="text-xs font-semibold">Mid</span>
+            <span className="text-[9px] text-slate-500">Scroll</span>
+          </button>
 
-        <button
-          onClick={() => handleButtonClick(2, 'medium')}
-          className="flex-1 rounded-xl glass-btn flex flex-col items-center justify-center text-slate-300 active:text-white active:bg-brand-600/30"
-        >
-          <span className="text-sm font-semibold">Right Click</span>
-          <span className="text-[10px] text-slate-400/80">Context Menu</span>
-        </button>
-      </div>
+          <button
+            onClick={() => handleButtonClick(2, 'medium')}
+            className="flex-1 rounded-xl glass-btn flex flex-col items-center justify-center text-slate-300 active:text-white active:bg-brand-600/30"
+          >
+            <span className="text-sm font-semibold">Right Click</span>
+            <span className="text-[10px] text-slate-400/80">Context Menu</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

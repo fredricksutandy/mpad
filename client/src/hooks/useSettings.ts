@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AppSettings } from '../types.js';
 
-const STORAGE_KEY = 'mpad_settings_v1';
+const STORAGE_KEY = 'mpad_settings_v2';
 
 const defaultSettings: AppSettings = {
   sensitivity: 1.35,
@@ -11,6 +11,9 @@ const defaultSettings: AppSettings = {
   haptics: true,
   showPhysicalButtons: false,
   leftHanded: false,
+  /* --- EXTENDED_SECTION_FEATURE_START --- */
+  companionModule: 'none',
+  /* --- EXTENDED_SECTION_FEATURE_END --- */
 };
 
 export function useSettings() {

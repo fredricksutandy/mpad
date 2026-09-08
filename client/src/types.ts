@@ -1,5 +1,9 @@
 export type ControlMode = 'trackpad' | 'keyboard' | 'media' | 'presentation' | 'numpad';
 
+/* --- EXTENDED_SECTION_FEATURE_START --- */
+export type CompanionModule = 'none' | 'media' | 'keyboard' | 'presentation' | 'numpad';
+/* --- EXTENDED_SECTION_FEATURE_END --- */
+
 export interface AppSettings {
   sensitivity: number; // 0.5 to 3.0
   acceleration: number; // 1.0 to 2.5
@@ -8,6 +12,9 @@ export interface AppSettings {
   haptics: boolean;
   showPhysicalButtons: boolean;
   leftHanded: boolean;
+  /* --- EXTENDED_SECTION_FEATURE_START --- */
+  companionModule: CompanionModule;
+  /* --- EXTENDED_SECTION_FEATURE_END --- */
 }
 
 export type InputPacket =

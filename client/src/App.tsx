@@ -10,6 +10,9 @@ import { MediaRemote } from './components/MediaRemote.js';
 import { Presenter } from './components/Presenter.js';
 import { Numpad } from './components/Numpad.js';
 import { SettingsModal } from './components/SettingsModal.js';
+/* --- EXTENDED_SECTION_FEATURE_START --- */
+import { CompanionWidget } from './components/CompanionWidget.js';
+/* --- EXTENDED_SECTION_FEATURE_END --- */
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -17,15 +20,17 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const { isConnected, ping, statusMessage, sendPacket, reconnect } = useWebSocket();
-  const { isLocked } = useWakeLock();
+  useWakeLock();
   const { settings, updateSetting, resetSettings } = useSettings();
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-dark-950 text-slate-100 font-sans">
-      {/* Top Header */}
+      {/* Top Header & Slide-Out Menu */}
       <StatusHeader
         mode={mode}
         setMode={setMode}
+        settings={settings}
+        updateSetting={updateSetting}
         isConnected={isConnected}
         ping={ping}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -33,7 +38,7 @@ export const App: React.FC = () => {
 
       {/* Offline Alert Banner */}
       {!isConnected && (
-        <div className="bg-rose-500/20 border-b border-rose-500/30 px-3 py-1.5 flex items-center justify-between text-rose-300 text-xs animate-fade-in">
+        <div className="bg-rose-500/20 border-b border-rose-500/30 px-3 py-1.5 flex items-center justify-between text-rose-300 text-xs animate-fade-in z-10 flex-shrink-0">
           <div className="flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
             <span className="truncate">{statusMessage}</span>
@@ -48,11 +53,31 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* Main Content Area Based on Selected Mode */}
+      {/* Main Content Area */}
       <main className="flex-1 w-full overflow-hidden relative">
         {mode === 'trackpad' && (
-          <Trackpad settings={settings} sendPacket={sendPacket} />
+          <div className="flex flex-col landscape:flex-row h-full w-full overflow-hidden">
+            {/* Primary Trackpad Area (~75% - 80%) */}
+            <div className="flex-1 h-full w-full overflow-hidden">
+              <Trackpad settings={settings} sendPacket={sendPacket} />
+            </div>
+
+            {/* --- EXTENDED_SECTION_FEATURE_START --- */}
+            {/* Optional Companion Split Section (~20% - 25%) */}
+            {settings.companionModule !== 'none' && (
+              <div className="h-44 landscape:h-full w-full landscape:w-80 flex-shrink-0">
+                <CompanionWidget
+                  module={settings.companionModule}
+                  onClose={() => updateSetting('companionModule', 'none')}
+                  sendPacket={sendPacket}
+                  hapticsEnabled={settings.haptics}
+                />
+              </div>
+            )}
+            {/* --- EXTENDED_SECTION_FEATURE_END --- */}
+          </div>
         )}
+
         {mode === 'keyboard' && (
           <KeyboardPad sendPacket={sendPacket} hapticsEnabled={settings.haptics} />
         )}
