@@ -4,7 +4,8 @@ import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
 import fs from 'fs';
 import { InputManager } from './input/inputManager.js';
-import { getLocalIP, displayBanner } from './network.js';
+import { getLocalIP, getLocalIPs, displayBanner } from './network.js';
+import { renderHostPage } from './hostPage.js';
 import { InputEvent } from './protocol.js';
 
 const PORT = parseInt(process.env.PORT || '8765', 10);
@@ -14,6 +15,33 @@ const wss = new WebSocketServer({ server });
 
 const inputManager = new InputManager();
 const localIP = getLocalIP();
+
+// Track active WebSocket connections
+let activeClients = 0;
+
+// --- Desktop host routes -------------------------------------------------
+// Registered before the SPA catch-all below, which would otherwise swallow them.
+
+app.get('/host', async (req, res) => {
+  try {
+    res.type('html').send(await renderHostPage(PORT, getLocalIPs()));
+  } catch (err) {
+    console.error('[mPad] Failed to render host page:', err);
+    res.status(500).send('Failed to render mPad host page.');
+  }
+});
+
+app.get('/__host/status', (req, res) => {
+  res.json({ clients: activeClients, port: PORT, addresses: getLocalIPs() });
+});
+
+app.post('/__host/stop', (req, res) => {
+  res.json({ stopping: true });
+  console.log('🛑 Stop requested from host page.');
+  setTimeout(cleanup, 100);
+});
+
+// --- Client app ----------------------------------------------------------
 
 // Serve static client assets from /dist if built, or informative message
 const distPath = path.resolve(process.cwd(), 'dist');
@@ -48,9 +76,6 @@ if (fs.existsSync(distPath)) {
     `);
   });
 }
-
-// Track active WebSocket connections
-let activeClients = 0;
 
 wss.on('connection', (ws: WebSocket) => {
   activeClients++;
@@ -87,6 +112,23 @@ wss.on('connection', (ws: WebSocket) => {
   ws.on('error', (err) => {
     console.error('[mPad WS Error]:', err);
   });
+});
+
+// The WebSocket server re-emits the HTTP server's listen error; without a
+// handler here the ws library throws before the handler below can report anything useful.
+wss.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code !== 'EADDRINUSE') console.error('[mPad WS Server Error]:', err.message);
+});
+
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    // Another mPad instance already owns the port. The launcher simply opens
+    // the host page of the running instance, so exiting quietly is correct.
+    console.error(`⚠️  Port ${PORT} is already in use — mPad is probably already running.`);
+    process.exit(1);
+  }
+  console.error('[mPad Server Error]:', err);
+  process.exit(1);
 });
 
 server.listen(PORT, '0.0.0.0', () => {

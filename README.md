@@ -47,21 +47,44 @@
 
 ### 1. Requirements
 - Node.js (v18+)
+- Windows (the input bridge uses Win32 `SendInput`)
 - Computer and smartphone connected to the **same Wi-Fi network** (or mobile hotspot).
 
-### 2. Start mPad
+### 2. One-time setup
 In the `mpad` directory, run:
 
 ```bash
-npm start
-# or for development mode:
-npm run dev
+npm install
+npm run setup
 ```
 
-### 3. Connect Phone
-1. Your terminal will display a **QR code** and a local network URL (e.g. `http://192.168.1.X:8765`).
-2. Open your phone's Camera app and scan the QR code (or type the URL into Safari / Chrome).
-3. *(Optional)* Tap **"Add to Home Screen"** on your phone for a borderless, full-screen native app experience!
+`npm run setup` builds the app and puts an **mPad** shortcut on your desktop.
+
+### 3. Daily use — no terminal
+1. Double-click the **mPad** shortcut. No console window appears.
+2. Your browser opens the host page at `http://localhost:8765/host` — QR code, LAN URL, and a live count of connected phones.
+3. Scan the QR with your phone camera (or type the URL into Safari / Chrome).
+4. *(Optional)* Tap **"Add to Home Screen"** on your phone for a borderless, full-screen native app experience!
+5. Press **Stop mPad server** on the host page when you are done.
+
+Double-clicking the shortcut while mPad is already running just reopens the host page — it never starts a second copy.
+
+> **Not connecting?** If your PC has VM, WSL, or VPN adapters, the host page lists every address it found; pick a different one to regenerate the QR. Startup problems are logged to `mpad.log` in the project folder.
+
+### 4. After changing the code
+The shortcut runs the compiled output, so rebuild first:
+
+```bash
+npm run build
+```
+
+Or run from a terminal as before:
+
+```bash
+npm start
+# development mode:
+npm run dev
+```
 
 ---
 
@@ -78,5 +101,6 @@ Tap the **Settings (⚙️) icon** in the top header on your phone to configure:
 ## 🛠️ Tech Stack & Architecture
 
 - **Desktop Host**: Node.js + Express + WebSocket (`ws`) + Win32 `SendInput` native bridge (`InputBridge.exe`).
+- **Launcher**: Desktop shortcut -> hidden VBScript launcher -> host page (`/host`) with server-rendered QR code and stop control.
 - **Mobile Client**: React 18 + Vite + Tailwind CSS + Lucide Icons + Screen Wake Lock API + Vibration API.
 - **Communication Protocol**: High-frequency JSON/Binary event packets streamed over local WebSocket.

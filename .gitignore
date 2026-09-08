@@ -29,3 +29,7 @@ Thumbs.db
 .idea/
 *.suo
 *.user
+
+# Launcher runtime output
+mpad.log
+assets/mpad.ico

@@ -12,7 +12,9 @@
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
     "dev": "npm run build:bridge && tsx server/index.ts",
-    "start": "node dist-server/index.js"
+    "start": "node dist-server/index.js",
+    "shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-shortcut.ps1",
+    "setup": "npm run build && npm run shortcut"
   },
   "keywords": [
     "trackpad",
@@ -26,9 +28,11 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@types/qrcode": "^1.5.6",
     "express": "^4.19.2",
     "ip": "^2.0.1",
     "lucide-react": "^0.400.0",
+    "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
