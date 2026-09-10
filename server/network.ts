@@ -57,22 +57,26 @@ export function getLocalIP(): string {
   return getLocalIPs()[0]?.address ?? '127.0.0.1';
 }
 
-export function displayBanner(port: number, localIP: string) {
-  const url = `http://${localIP}:${port}`;
-
+export function displayBanner(port: number, localIP: string, pairingUrl: string) {
   console.log('\n======================================================');
-  console.log('   📱  mPad — Mobile-to-PC Trackpad Server  📱');
+  console.log('   mPad - Mobile-to-PC Trackpad Server');
   console.log('======================================================\n');
-  console.log(`🚀 Server listening on:`);
-  console.log(`   👉 Local:   http://localhost:${port}`);
-  console.log(`   👉 Network: ${url}`);
-  console.log(`   👉 QR page: http://localhost:${port}/host\n`);
-  console.log('📲 Scan this QR code with your phone camera to connect:\n');
+  console.log(`Server listening on http://${localIP}:${port}`);
+  console.log(`Open the QR page on this PC:  http://localhost:${port}/host\n`);
 
-  qrcode.generate(url, { small: true }, (qr) => {
+  // Only draw the QR on a real terminal. When the launcher runs mPad hidden,
+  // stdout is redirected to mpad.log - and the QR encodes the pairing token,
+  // which has no business sitting in a file on disk.
+  if (!process.stdout.isTTY) {
+    console.log('Running without a terminal: scan the QR code on the host page above.');
+    return;
+  }
+
+  console.log('Scan this QR code with your phone camera to connect:\n');
+  qrcode.generate(pairingUrl, { small: true }, (qr) => {
     console.log(qr);
   });
 
-  console.log('💡 Tip: Make sure your phone is connected to the same Wi-Fi network.');
-  console.log('💡 On iOS/Android: Add to Home Screen for fullscreen trackpad experience!\n');
+  console.log('Tip: your phone must be on the same Wi-Fi network.');
+  console.log('Tip: the pairing code changes every time mPad restarts.\n');
 }

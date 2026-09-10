@@ -6,12 +6,33 @@ import fs from 'fs';
 import { InputManager } from './input/inputManager.js';
 import { getLocalIP, getLocalIPs, displayBanner } from './network.js';
 import { renderHostPage } from './hostPage.js';
+import { isAllowedHost, isAllowedOrigin, isLoopback, pairingUrl, tokenFromRequest, tokenMatches } from './auth.js';
 import { InputEvent } from './protocol.js';
 
 const PORT = parseInt(process.env.PORT || '8765', 10);
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+
+const wss = new WebSocketServer({
+  server,
+  verifyClient: ({ origin, req }, done) => {
+    if (!isAllowedHost(req.headers.host)) {
+      console.warn('🚫 [mPad] Rejected socket: unexpected Host header.');
+      return done(false, 403, 'Forbidden');
+    }
+    // Any website in any browser can open a WebSocket to this address —
+    // WebSockets ignore the same-origin policy. Only our own page may connect.
+    if (!isAllowedOrigin(origin)) {
+      console.warn('🚫 [mPad] Rejected socket from a foreign origin.');
+      return done(false, 403, 'Forbidden');
+    }
+    if (!tokenMatches(tokenFromRequest(req))) {
+      console.warn('🚫 [mPad] Rejected socket: missing or stale pairing token — phone must rescan the QR code.');
+      return done(false, 401, 'Unauthorized');
+    }
+    return done(true);
+  },
+});
 
 const inputManager = new InputManager();
 const localIP = getLocalIP();
@@ -20,10 +41,24 @@ const localIP = getLocalIP();
 let activeClients = 0;
 
 // --- Desktop host routes -------------------------------------------------
-// Registered before the SPA catch-all below, which would otherwise swallow them.
+// Registered before the SPA catch-all below, which would otherwise swallow
+// them. They render the pairing QR, so they answer only to the PC itself: a
+// LAN device able to fetch /host could simply read the token out of it.
+
+app.use(['/host', '/__host'], (req, res, next) => {
+  if (!isLoopback(req.socket)) {
+    console.warn(`🚫 [mPad] Blocked remote request to ${req.path}`);
+    return res.status(403).send('The mPad host page is only available on the computer running mPad.');
+  }
+  if (!isAllowedHost(req.headers.host)) {
+    return res.status(403).send('Forbidden');
+  }
+  next();
+});
 
 app.get('/host', async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store');
     res.type('html').send(await renderHostPage(PORT, getLocalIPs()));
   } catch (err) {
     console.error('[mPad] Failed to render host page:', err);
@@ -31,7 +66,15 @@ app.get('/host', async (req, res) => {
   }
 });
 
+// Loopback-only: gives the host page a manual pairing link and lets the
+// test suite obtain the current token.
+app.get('/__host/pairing', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ url: pairingUrl(localIP, PORT) });
+});
+
 app.get('/__host/status', (req, res) => {
+  res.set('Cache-Control', 'no-store');
   res.json({ clients: activeClients, port: PORT, addresses: getLocalIPs() });
 });
 
@@ -79,7 +122,7 @@ if (fs.existsSync(distPath)) {
 
 wss.on('connection', (ws: WebSocket) => {
   activeClients++;
-  console.log(`📱 [mPad] Phone connected! Total active clients: ${activeClients}`);
+  console.log(`📱 [mPad] Phone paired and connected! Total active clients: ${activeClients}`);
 
   // Send initial connection ACK
   ws.send(JSON.stringify({ type: 'status', message: 'Connected to mPad Desktop Host', connectedClients: activeClients }));
@@ -94,8 +137,11 @@ wss.on('connection', (ws: WebSocket) => {
         return;
       }
 
-      if (event.type !== 'move') {
-        console.log(`⚡ [mPad Input]: ${event.type}`, JSON.stringify(event));
+      // Log the kind of event only, never its payload: `text` and `key` events
+      // carry whatever the user typed, and the launcher redirects stdout into
+      // mpad.log on disk.
+      if (event.type !== 'move' && event.type !== 'scroll') {
+        console.log(`⚡ [mPad Input]: ${event.type}`);
       }
 
       inputManager.handleEvent(event);
@@ -132,7 +178,7 @@ server.on('error', (err: NodeJS.ErrnoException) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  displayBanner(PORT, localIP);
+  displayBanner(PORT, localIP, pairingUrl(localIP, PORT));
 });
 
 // Graceful cleanup

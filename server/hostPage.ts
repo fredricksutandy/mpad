@@ -1,5 +1,6 @@
 import QRCode from 'qrcode';
 import { LocalAddress } from './network.js';
+import { pairingUrl } from './auth.js';
 
 function escapeHtml(value: string): string {
   return value
@@ -19,7 +20,8 @@ export async function renderHostPage(port: number, addresses: LocalAddress[]): P
 
   const cards = await Promise.all(
     candidates.map(async (addr, index) => {
-      const url = `http://${addr.address}:${port}`;
+      const url = pairingUrl(addr.address, port);
+      const displayUrl = `http://${addr.address}:${port}`;
       const svg = await QRCode.toString(url, {
         type: 'svg',
         margin: 1,
@@ -29,7 +31,7 @@ export async function renderHostPage(port: number, addresses: LocalAddress[]): P
       return `
         <section class="qr-panel${index === 0 ? ' active' : ''}" data-index="${index}">
           <div class="qr">${svg}</div>
-          <p class="url">${escapeHtml(url)}</p>
+          <p class="url">${escapeHtml(displayUrl)}</p>
           <p class="iface">via ${escapeHtml(addr.iface)}</p>
         </section>`;
     })

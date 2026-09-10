@@ -1,30 +1,73 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { InputPacket, ServerStatusPacket } from '../types.js';
 
+const TOKEN_KEY = 'mpad.pairingToken';
+const MAX_PAIRING_ATTEMPTS = 3;
+
+/**
+ * The pairing token arrives as ?t=... in the QR code's URL. Store it, then
+ * strip it from the address bar so it is not left in history or shared by a
+ * screenshot. Falls back to whatever was stored by an earlier scan.
+ */
+function readPairingToken(): string | null {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get('t');
+
+    if (fromUrl) {
+      try {
+        localStorage.setItem(TOKEN_KEY, fromUrl);
+      } catch {
+        // Private browsing: keep going with the in-memory copy.
+      }
+      params.delete('t');
+      const rest = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : ''));
+      return fromUrl;
+    }
+
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export function useWebSocket() {
   const [isConnected, setIsConnected] = useState(false);
   const [ping, setPing] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState('Connecting to PC...');
-  
+
   const wsRef = useRef<WebSocket | null>(null);
   const pingTimestampRef = useRef<number>(0);
   const reconnectTimerRef = useRef<number | null>(null);
   const pingIntervalRef = useRef<number | null>(null);
+  const tokenRef = useRef<string | null>(readPairingToken());
+  const everConnectedRef = useRef(false);
+  const failedAttemptsRef = useRef(0);
 
   const getWsUrl = useCallback(() => {
     const loc = window.location;
     const protocol = loc.protocol === 'https:' ? 'wss:' : 'ws:';
-    
+    const token = encodeURIComponent(tokenRef.current ?? '');
+
     // If running on Vite dev server (e.g. 5173), point to backend port 8765
     if (loc.port === '5173') {
-      return `${protocol}//${loc.hostname}:8765`;
+      return `${protocol}//${loc.hostname}:8765/?t=${token}`;
     }
-    
-    return `${protocol}//${loc.host}`;
+
+    return `${protocol}//${loc.host}/?t=${token}`;
   }, []);
 
   const connect = useCallback(() => {
     if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    // Without a token the server will refuse the socket, so say so plainly
+    // instead of reconnecting forever against a closed door.
+    if (!tokenRef.current) {
+      setIsConnected(false);
+      setStatusMessage('Not paired. Scan the QR code shown on your PC.');
       return;
     }
 
@@ -34,6 +77,8 @@ export function useWebSocket() {
       wsRef.current = ws;
 
       ws.onopen = () => {
+        everConnectedRef.current = true;
+        failedAttemptsRef.current = 0;
         setIsConnected(true);
         setStatusMessage('Connected');
         
@@ -65,12 +110,24 @@ export function useWebSocket() {
       ws.onclose = () => {
         setIsConnected(false);
         setPing(null);
-        setStatusMessage('Disconnected. Reconnecting...');
-        
+
         if (pingIntervalRef.current) {
           clearInterval(pingIntervalRef.current);
           pingIntervalRef.current = null;
         }
+
+        // A socket that never opened means the server refused the handshake —
+        // almost always a stale token after mPad restarted. Retrying that
+        // forever is pointless, so ask for a rescan instead.
+        if (!everConnectedRef.current) {
+          failedAttemptsRef.current++;
+          if (failedAttemptsRef.current >= MAX_PAIRING_ATTEMPTS) {
+            setStatusMessage('Pairing rejected. Scan the QR code on your PC again.');
+            return;
+          }
+        }
+
+        setStatusMessage('Disconnected. Reconnecting...');
 
         // Schedule auto-reconnect
         if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
@@ -107,5 +164,12 @@ export function useWebSocket() {
     }
   }, []);
 
-  return { isConnected, ping, statusMessage, sendPacket, reconnect: connect };
+  /** Manual retry: re-read the token first, in case the user just rescanned. */
+  const reconnect = useCallback(() => {
+    tokenRef.current = readPairingToken();
+    failedAttemptsRef.current = 0;
+    connect();
+  }, [connect]);
+
+  return { isConnected, ping, statusMessage, sendPacket, reconnect };
 }

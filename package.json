@@ -14,7 +14,8 @@
     "dev": "npm run build:bridge && tsx server/index.ts",
     "start": "node dist-server/index.js",
     "shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-shortcut.ps1",
-    "setup": "npm run build && npm run shortcut"
+    "setup": "npm run build && npm run shortcut",
+    "test:auth": "npm run build:server && node scripts/test-auth.mjs"
   },
   "keywords": [
     "trackpad",
