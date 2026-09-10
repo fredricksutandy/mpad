@@ -4,6 +4,9 @@ export type ControlMode = 'trackpad' | 'keyboard' | 'media' | 'presentation' | '
 export type CompanionModule = 'none' | 'media' | 'keyboard' | 'presentation' | 'numpad';
 /* --- EXTENDED_SECTION_FEATURE_END --- */
 
+/** What a 3-finger horizontal swipe does: switch windows, or switch browser tabs. */
+export type HorizontalSwipeAction = 'apps' | 'tabs';
+
 export interface AppSettings {
   sensitivity: number; // 0.5 to 3.0
   acceleration: number; // 1.0 to 2.5
@@ -12,6 +15,8 @@ export interface AppSettings {
   haptics: boolean;
   showPhysicalButtons: boolean;
   leftHanded: boolean;
+  threeFingerGestures: boolean;
+  horizontalSwipeAction: HorizontalSwipeAction;
   /* --- EXTENDED_SECTION_FEATURE_START --- */
   companionModule: CompanionModule;
   /* --- EXTENDED_SECTION_FEATURE_END --- */

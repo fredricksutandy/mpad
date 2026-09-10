@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppSettings } from '../types.js';
-import { X, Sliders, RotateCcw, Smartphone, MousePointer, Gauge } from 'lucide-react';
+import { X, Sliders, RotateCcw, Smartphone, MousePointer, Gauge, Hand } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -151,6 +151,60 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 className="w-5 h-5 accent-brand-500 rounded cursor-pointer"
               />
             </label>
+          </div>
+
+          {/* Multi-Finger Gestures */}
+          <div className="pt-2 border-t border-white/5 space-y-4">
+            <label className="flex items-center justify-between cursor-pointer">
+              <div className="flex items-center gap-2">
+                <Hand className="w-4 h-4 text-brand-400" />
+                <div>
+                  <span className="font-semibold text-xs block">3-Finger Gestures</span>
+                  <span className="text-[11px] text-slate-400">Swipe up for Task View, down for Desktop</span>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.threeFingerGestures}
+                onChange={(e) => updateSetting('threeFingerGestures', e.target.checked)}
+                className="w-5 h-5 accent-brand-500 rounded cursor-pointer"
+              />
+            </label>
+
+            <div className={settings.threeFingerGestures ? 'space-y-2' : 'space-y-2 opacity-40 pointer-events-none'}>
+              <div>
+                <span className="font-semibold text-xs block">Horizontal Swipe</span>
+                <span className="text-[11px] text-slate-400">What a 3-finger left / right swipe switches</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateSetting('horizontalSwipeAction', 'apps')}
+                  className={`rounded-xl px-3 py-2 text-left border transition-colors ${
+                    settings.horizontalSwipeAction === 'apps'
+                      ? 'bg-brand-600/30 border-brand-500/60 text-white'
+                      : 'glass-btn border-white/10 text-slate-300'
+                  }`}
+                >
+                  <span className="block text-xs font-semibold">Apps</span>
+                  <span className="block text-[10px] font-mono text-slate-400">alt+tab</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => updateSetting('horizontalSwipeAction', 'tabs')}
+                  className={`rounded-xl px-3 py-2 text-left border transition-colors ${
+                    settings.horizontalSwipeAction === 'tabs'
+                      ? 'bg-brand-600/30 border-brand-500/60 text-white'
+                      : 'glass-btn border-white/10 text-slate-300'
+                  }`}
+                >
+                  <span className="block text-xs font-semibold">Browser Tabs</span>
+                  <span className="block text-[10px] font-mono text-slate-400">ctrl+tab</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

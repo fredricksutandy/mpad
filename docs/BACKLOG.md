@@ -43,24 +43,57 @@ toggle still means what it says.
 
 ## 3. Multi-finger gestures (3, 4, 5 fingers), macOS-style
 
-**Proposed mapping to Windows equivalents:**
+**3-finger: done.** Shipped in `Trackpad.tsx`.
 
 | Gesture | Action | Keys |
 |---|---|---|
 | 3-finger swipe up | Task View | `win+tab` |
 | 3-finger swipe down | Show desktop | `win+d` |
-| 3-finger swipe left/right | Switch app | `alt+tab` / `alt+shift+tab` |
-| 4-finger swipe left/right | Switch virtual desktop | `win+ctrl+left` / `win+ctrl+right` |
+| 3-finger swipe left/right | Switch app *or* browser tab | `alt+tab` / `ctrl+tab` (+`shift` reversed) |
+
+The horizontal pair is a setting (`horizontalSwipeAction`, default `apps`), and the
+whole feature has an on/off switch (`threeFingerGestures`). Both live in the Settings
+modal. The confirmed mapping fires as a plain `shortcut` packet, so the protocol, the
+server and InputBridge were untouched, as predicted.
+
+**Tuning constants** (top of `Trackpad.tsx`): 60px commit threshold, 1.3x dominant-axis
+ratio so diagonals do nothing, one action per touch cycle, 900ms on-screen confirmation.
+
+**Bug this uncovered, now fixed.** Fingers never land or lift together, so a 3-finger
+swipe used to ramp through `count === 1` and `count === 2` at both ends. Measured on
+the pre-change build: ~470px of cursor drift, stray scroll packets, and - when the hand
+came off as one unit, the normal way to end a swipe - a phantom **right click**, because
+`isTwoFingerTapCandidate` was never cleared by a third finger. The fix latches the max
+touch count for the cycle and mutes the 1- and 2-finger paths until the pad is clear.
+A small (4px) dead zone on two-finger scroll closes the landing-side half.
+
+**Regression net:** `scripts/test-gestures.mjs` drives the built client in Chromium with
+synthetic multi-touch and asserts on the packets the app emits - the mappings, the
+debounce, the thresholds, the leaks above, and that 1- and 2-finger behaviour is
+unchanged. Playwright is deliberately not a project dependency; the file header says
+how to run it. Extend it alongside the 4- and 5-finger work.
+
+**Still open: 4 and 5 fingers.** A 4th or 5th finger latches the count above 3 and
+deliberately fires nothing, so these can be added without disturbing the 3-finger set.
+
+| Gesture | Action | Keys |
+|---|---|---|
+| 4-finger swipe left/right | Previous / next virtual desktop | `win+ctrl+left` / `win+ctrl+right` |
+| 4-finger swipe up | New virtual desktop | `win+ctrl+d` |
+| 4-finger swipe down | Close virtual desktop | `win+ctrl+f4` |
 | 4-finger tap | Action Center | `win+a` |
-| 5-finger pinch | Show desktop | `win+d` |
+| 5-finger tap | Show desktop | `win+d` |
 
-**Nice property:** these can all be emitted as existing `shortcut` packets, so the
-server, protocol, and InputBridge need **no changes**. Work is confined to touch
-tracking in `Trackpad.tsx` - track pointer count, direction, and a distance
-threshold, and fire once per gesture rather than per frame.
+Grouping all four 4-finger directions around virtual desktops keeps one theme per
+finger count, which is easier to remember than a mixed bag. `win+ctrl+f4` needs `f4`
+plus the existing modifiers - already in `InputBridge.cs`'s `keyMap`, and `SendKey`
+already flags the arrows and Win as extended keys, so still no server work.
 
-**Watch out:** the existing 1- and 2-finger handlers must not fire while 3+ fingers
-are down. Debounce so one swipe does not emit a burst of `alt+tab`.
+**Watch out for 5 fingers:** a phone in portrait gives roughly 8cm of pad width and
+five adult fingertips need most of that, so the contact points end up close together
+and the centroid direction gets noisy. A 5-finger *tap* is reliable; a 5-finger swipe
+or pinch on a phone-sized surface probably is not. Prove it on a real handset before
+committing to a mapping.
 
 ---
 

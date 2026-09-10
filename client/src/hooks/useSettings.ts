@@ -11,6 +11,8 @@ const defaultSettings: AppSettings = {
   haptics: true,
   showPhysicalButtons: false,
   leftHanded: false,
+  threeFingerGestures: true,
+  horizontalSwipeAction: 'apps',
   /* --- EXTENDED_SECTION_FEATURE_START --- */
   companionModule: 'none',
   /* --- EXTENDED_SECTION_FEATURE_END --- */

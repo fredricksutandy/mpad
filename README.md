@@ -11,6 +11,7 @@
 - **1-Finger Tap**: Left Click with instant haptic vibration.
 - **2-Finger Tap**: Right Click (context menu).
 - **2-Finger Drag**: Smooth vertical & horizontal scrolling (with Natural / Inverted scroll toggle).
+- **3-Finger Swipe**: Up for Task View, down for Show Desktop, left / right to switch apps (`Alt+Tab`) or browser tabs (`Ctrl+Tab`) — your pick in Settings.
 - **Tap-and-Hold + Drag**: Drag & Drop / Window moving / Text selection.
 - **Double Tap**: Double Click.
 - **Dedicated Buttons**: Optional on-screen Left, Middle, and Right click buttons.
@@ -95,6 +96,8 @@ Tap the **Settings (⚙️) icon** in the top header on your phone to configure:
 - **Cursor Acceleration**: Adjust velocity curve for flick gestures.
 - **Scroll Speed & Invert Scroll**: Toggle Natural (Mac style) vs Standard (Windows style) scrolling.
 - **Haptic Feedback**: Enable / disable vibration on clicks and taps.
+- **3-Finger Gestures**: Turn multi-finger swipes on or off, and choose whether a horizontal
+  swipe switches **Apps** (`alt+tab`) or **Browser Tabs** (`ctrl+tab`).
 
 ---
 
