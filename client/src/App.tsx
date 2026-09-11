@@ -64,8 +64,9 @@ export const App: React.FC = () => {
 
             {/* --- EXTENDED_SECTION_FEATURE_START --- */}
             {/* Optional Companion Split Section (~20% - 25%) */}
+            {/* Height comes from the dock itself: the keyboard module is an accordion. */}
             {settings.companionModule !== 'none' && (
-              <div className="h-44 landscape:h-full w-full landscape:w-80 flex-shrink-0">
+              <div className="w-full landscape:h-full landscape:w-80 flex-shrink-0">
                 <CompanionWidget
                   module={settings.companionModule}
                   onClose={() => updateSetting('companionModule', 'none')}

@@ -1,5 +1,5 @@
 /* --- EXTENDED_SECTION_FEATURE_START --- */
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { CompanionModule, InputPacket } from '../types.js';
 import { useHaptics } from '../hooks/useHaptics.js';
 import {
@@ -25,7 +25,28 @@ import {
   ArrowLeft,
   ArrowRight,
   X,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
+
+/**
+ * On-screen key rows for the companion keyboard. Row 3 is always
+ * [modifier][7 keys][backspace] so both layers keep the same silhouette.
+ */
+const LETTER_ROWS = [
+  ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+  ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+  ['z', 'x', 'c', 'v', 'b', 'n', 'm'],
+];
+
+const SYMBOL_ROWS = [
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+  ['!', '@', '#', '$', '%', '&', '*', '(', ')'],
+  ['~', '-', '_', '=', '+', '/', ':', ';'],
+];
+
+/** Sticky-shift states, mirroring a phone keyboard: one-shot, then locked. */
+type ShiftState = 'off' | 'once' | 'lock';
 
 interface CompanionWidgetProps {
   module: CompanionModule;
@@ -42,7 +63,17 @@ export const CompanionWidget: React.FC<CompanionWidgetProps> = ({
 }) => {
   const { triggerHaptic } = useHaptics(hapticsEnabled);
 
+  // Accordion + keyboard state. Local on purpose: the dock is a transient work
+  // surface, so nothing here belongs in saved settings.
+  const [keyboardOpen, setKeyboardOpen] = useState(true);
+  const [shift, setShift] = useState<ShiftState>('off');
+  const [symbols, setSymbols] = useState(false);
+  const lastShiftTapRef = useRef(0);
+
   if (module === 'none') return null;
+
+  const isKeyboard = module === 'keyboard';
+  const collapsed = isKeyboard && !keyboardOpen;
 
   const handleKey = (key: string) => {
     triggerHaptic('light');
@@ -64,19 +95,74 @@ export const CompanionWidget: React.FC<CompanionWidgetProps> = ({
     sendPacket({ type: 'media', action });
   };
 
+  const handleCharKey = (char: string) => {
+    const upper = char.toUpperCase();
+    const hasCase = upper !== char;
+
+    triggerHaptic('light');
+    sendPacket({ type: 'text', text: shift !== 'off' && hasCase ? upper : char });
+    if (shift === 'once' && hasCase) setShift('off');
+  };
+
+  /** Tap for a one-shot capital, double-tap to lock caps. */
+  const handleShiftKey = () => {
+    triggerHaptic('selection');
+    const now = performance.now();
+    const isDoubleTap = now - lastShiftTapRef.current < 400;
+    lastShiftTapRef.current = now;
+
+    if (isDoubleTap) {
+      setShift('lock');
+      return;
+    }
+    setShift((prev) => (prev === 'off' ? 'once' : 'off'));
+  };
+
+  const toggleKeyboard = () => {
+    triggerHaptic('selection');
+    setKeyboardOpen((open) => !open);
+  };
+
+  const keyClass = (extra = '') =>
+    `h-9 flex-1 min-w-0 rounded-md glass-btn flex items-center justify-center text-[13px] font-medium text-slate-200 ${extra}`;
+
+  /** Keys fire on pointerdown: typing should feel immediate, like the trackpad. */
+  const pressHandler = (action: () => void) => (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    action();
+  };
+
   return (
-    <aside className="relative flex flex-col bg-dark-900/95 border-t landscape:border-t-0 landscape:border-l border-white/10 p-2 select-none overflow-hidden transition-all h-full w-full">
-      {/* Mini Title & Close Bar */}
-      <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-white/5 px-1">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          {module === 'media' && '🎵 Quick Media Dock'}
-          {module === 'keyboard' && '⌨️ Quick Hotkeys & Arrows'}
-          {module === 'presentation' && '📊 Quick Slide Clicker'}
-          {module === 'numpad' && '🔢 Quick Numpad'}
-        </span>
+    <aside
+      className={`relative flex flex-col bg-dark-900/95 border-t landscape:border-t-0 landscape:border-l border-white/10 p-2 select-none overflow-hidden transition-all w-full landscape:h-full ${
+        collapsed ? 'h-11' : isKeyboard ? 'h-auto max-h-[75vh]' : 'h-44'
+      }`}
+    >
+      {/* Mini Title & Close Bar — the title doubles as the keyboard accordion */}
+      <div
+        className={`flex items-center justify-between px-1 ${
+          collapsed ? '' : 'pb-1.5 mb-1.5 border-b border-white/5'
+        }`}
+      >
+        {isKeyboard ? (
+          <button
+            onClick={toggleKeyboard}
+            className="flex flex-1 items-center gap-1.5 text-left text-slate-400 active:text-white"
+            title={keyboardOpen ? 'Minimize keyboard' : 'Expand keyboard'}
+          >
+            {keyboardOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+            <span className="text-[10px] font-bold uppercase tracking-wider">⌨️ Keyboard & Hotkeys</span>
+          </button>
+        ) : (
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            {module === 'media' && '🎵 Quick Media Dock'}
+            {module === 'presentation' && '📊 Quick Slide Clicker'}
+            {module === 'numpad' && '🔢 Quick Numpad'}
+          </span>
+        )}
         <button
           onClick={onClose}
-          className="w-5 h-5 rounded-full glass-btn flex items-center justify-center text-slate-400 hover:text-white"
+          className="w-5 h-5 rounded-full glass-btn flex items-center justify-center text-slate-400 hover:text-white flex-shrink-0"
           title="Close Companion Dock"
         >
           <X className="w-3 h-3" />
@@ -185,9 +271,9 @@ export const CompanionWidget: React.FC<CompanionWidgetProps> = ({
         </div>
       )}
 
-      {/* Module: Keyboard / Hotkeys */}
-      {module === 'keyboard' && (
-        <div className="flex flex-col justify-around flex-1 gap-1.5 overflow-y-auto">
+      {/* Module: Keyboard — hotkeys, arrows, and the full QWERTY */}
+      {isKeyboard && keyboardOpen && (
+        <div className="flex flex-col flex-1 min-h-0 gap-1.5 overflow-y-auto">
           <div className="grid grid-cols-4 gap-1.5">
             <button onClick={() => handleShortcut('ctrl+c')} className="h-8 rounded-lg glass-btn text-[11px] font-medium text-slate-300 flex items-center justify-center gap-1">
               <Copy className="w-3 h-3" />
@@ -230,6 +316,88 @@ export const CompanionWidget: React.FC<CompanionWidgetProps> = ({
               </button>
               <button onClick={() => handleKey('right')} className="w-8 h-8 rounded-lg glass-btn flex items-center justify-center text-slate-300">
                 <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Full QWERTY — the reason the dock needs an accordion */}
+          <div className="flex flex-col gap-1 pt-1.5 border-t border-white/5">
+            {(symbols ? SYMBOL_ROWS : LETTER_ROWS).slice(0, 2).map((row, rowIndex) => (
+              <div key={row.join('')} className={`flex gap-1 ${rowIndex === 1 ? 'px-[4%]' : ''}`}>
+                {row.map((char) => (
+                  <button
+                    key={char}
+                    onPointerDown={pressHandler(() => handleCharKey(char))}
+                    className={keyClass()}
+                  >
+                    {shift === 'off' ? char : char.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            ))}
+
+            <div className="flex gap-1">
+              {!symbols && (
+                <button
+                  onPointerDown={pressHandler(handleShiftKey)}
+                  className={keyClass(
+                    shift === 'lock'
+                      ? 'bg-brand-600 text-white'
+                      : shift === 'once'
+                        ? 'bg-brand-600/40 text-white'
+                        : 'text-slate-400'
+                  )}
+                  title={shift === 'lock' ? 'Caps locked — tap to release' : 'Shift — double-tap to lock'}
+                >
+                  {shift === 'lock' ? '⇪' : '⇧'}
+                </button>
+              )}
+              {(symbols ? SYMBOL_ROWS : LETTER_ROWS)[2].map((char) => (
+                <button
+                  key={char}
+                  onPointerDown={pressHandler(() => handleCharKey(char))}
+                  className={keyClass()}
+                >
+                  {shift === 'off' ? char : char.toUpperCase()}
+                </button>
+              ))}
+              <button
+                onPointerDown={pressHandler(() => handleKey('backspace'))}
+                className={keyClass('text-rose-300')}
+                title="Backspace"
+              >
+                <Delete className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex gap-1">
+              <button
+                onPointerDown={pressHandler(() => {
+                  triggerHaptic('selection');
+                  setSymbols((on) => !on);
+                })}
+                className={keyClass('flex-[1.4] text-[11px] font-bold text-brand-300')}
+              >
+                {symbols ? 'ABC' : '?123'}
+              </button>
+              <button onPointerDown={pressHandler(() => handleCharKey(','))} className={keyClass()}>
+                ,
+              </button>
+              <button
+                onPointerDown={pressHandler(() => handleCharKey(' '))}
+                className={keyClass('flex-[4] text-[10px] uppercase tracking-wider text-slate-500')}
+              >
+                space
+              </button>
+              <button onPointerDown={pressHandler(() => handleCharKey('.'))} className={keyClass()}>
+                .
+              </button>
+              <button
+                onPointerDown={pressHandler(() => handleKey('enter'))}
+                className={keyClass('flex-[1.4] bg-brand-600/80 text-white')}
+                title="Enter"
+              >
+                <CornerDownLeft className="w-4 h-4" />
               </button>
             </div>
           </div>
