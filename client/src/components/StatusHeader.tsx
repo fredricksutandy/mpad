@@ -63,7 +63,7 @@ export const StatusHeader: React.FC<StatusHeaderProps> = ({
   const companionOptions: { id: CompanionModule; label: string; icon: React.ReactNode }[] = [
     { id: 'none', label: 'None (Full Screen Trackpad)', icon: <X className="w-4 h-4" /> },
     { id: 'media', label: 'Media Controls (Volume / Play)', icon: <Tv className="w-4 h-4" /> },
-    { id: 'keyboard', label: 'Keyboard & Hotkeys (Accordion)', icon: <Keyboard className="w-4 h-4" /> },
+    { id: 'keyboard', label: 'Keyboard & Hotkeys', icon: <Keyboard className="w-4 h-4" /> },
     { id: 'presentation', label: 'Slide Clicker (Next / Prev)', icon: <Presentation className="w-4 h-4" /> },
     { id: 'numpad', label: 'Numeric Keypad Dock', icon: <Hash className="w-4 h-4" /> },
   ];

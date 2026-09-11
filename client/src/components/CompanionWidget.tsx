@@ -1,5 +1,5 @@
 /* --- EXTENDED_SECTION_FEATURE_START --- */
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CompanionModule, InputPacket } from '../types.js';
 import { useHaptics } from '../hooks/useHaptics.js';
 import {
@@ -29,25 +29,6 @@ import {
   ChevronUp,
 } from 'lucide-react';
 
-/**
- * On-screen key rows for the companion keyboard. Row 3 is always
- * [modifier][7 keys][backspace] so both layers keep the same silhouette.
- */
-const LETTER_ROWS = [
-  ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
-  ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
-  ['z', 'x', 'c', 'v', 'b', 'n', 'm'],
-];
-
-const SYMBOL_ROWS = [
-  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
-  ['!', '@', '#', '$', '%', '&', '*', '(', ')'],
-  ['~', '-', '_', '=', '+', '/', ':', ';'],
-];
-
-/** Sticky-shift states, mirroring a phone keyboard: one-shot, then locked. */
-type ShiftState = 'off' | 'once' | 'lock';
-
 interface CompanionWidgetProps {
   module: CompanionModule;
   onClose: () => void;
@@ -63,12 +44,35 @@ export const CompanionWidget: React.FC<CompanionWidgetProps> = ({
 }) => {
   const { triggerHaptic } = useHaptics(hapticsEnabled);
 
-  // Accordion + keyboard state. Local on purpose: the dock is a transient work
+  // Accordion + typing state. Local on purpose: the dock is a transient work
   // surface, so nothing here belongs in saved settings.
   const [keyboardOpen, setKeyboardOpen] = useState(true);
-  const [shift, setShift] = useState<ShiftState>('off');
-  const [symbols, setSymbols] = useState(false);
-  const lastShiftTapRef = useRef(0);
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  /** What the PC has already received from this draft, for diffing edits. */
+  const sentRef = useRef('');
+
+  // iOS keeps the layout viewport the same size when the soft keyboard opens, so
+  // the dock would sit behind it. Lift it by however much of the viewport the
+  // keyboard covers; on Android the window resizes and this stays 0.
+  const [keyboardInset, setKeyboardInset] = useState(0);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const update = () => {
+      setKeyboardInset(Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop));
+    };
+
+    update();
+    viewport.addEventListener('resize', update);
+    viewport.addEventListener('scroll', update);
+    return () => {
+      viewport.removeEventListener('resize', update);
+      viewport.removeEventListener('scroll', update);
+    };
+  }, []);
 
   if (module === 'none') return null;
 
@@ -95,47 +99,78 @@ export const CompanionWidget: React.FC<CompanionWidgetProps> = ({
     sendPacket({ type: 'media', action });
   };
 
-  const handleCharKey = (char: string) => {
-    const upper = char.toUpperCase();
-    const hasCase = upper !== char;
-
-    triggerHaptic('light');
-    sendPacket({ type: 'text', text: shift !== 'off' && hasCase ? upper : char });
-    if (shift === 'once' && hasCase) setShift('off');
+  /** Start a fresh draft; the PC keeps whatever was already sent. */
+  const resetDraft = () => {
+    sentRef.current = '';
+    setDraft('');
   };
 
-  /** Tap for a one-shot capital, double-tap to lock caps. */
-  const handleShiftKey = () => {
-    triggerHaptic('selection');
-    const now = performance.now();
-    const isDoubleTap = now - lastShiftTapRef.current < 400;
-    lastShiftTapRef.current = now;
+  /**
+   * The phone's own keyboard edits this field, and every edit is forwarded as it
+   * happens: shared prefix stays, the rest is backspaced and retyped. That also
+   * covers autocorrect and predictive text, which rewrite whole words at once.
+   */
+  const handleDraftChange = (next: string) => {
+    const sent = sentRef.current;
 
-    if (isDoubleTap) {
-      setShift('lock');
-      return;
+    let shared = 0;
+    while (shared < sent.length && shared < next.length && sent[shared] === next[shared]) {
+      shared += 1;
     }
-    setShift((prev) => (prev === 'off' ? 'once' : 'off'));
+
+    const removals = sent.length - shared;
+    const addition = next.slice(shared);
+
+    for (let i = 0; i < removals; i += 1) sendPacket({ type: 'key', key: 'backspace' });
+    if (addition) sendPacket({ type: 'text', text: addition });
+    if (removals > 0 || addition) triggerHaptic('light');
+
+    sentRef.current = next;
+    setDraft(next);
   };
 
+  /** The phone's Go / Enter key. */
+  const handleDraftSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    triggerHaptic('medium');
+    sendPacket({ type: 'key', key: 'enter' });
+    resetDraft();
+  };
+
+  /** Backspace from the dock, kept in step with the draft. */
+  const handleBackspace = () => {
+    triggerHaptic('light');
+    sendPacket({ type: 'key', key: 'backspace' });
+    sentRef.current = sentRef.current.slice(0, -1);
+    setDraft((text) => text.slice(0, -1));
+  };
+
+  /** Arrows move the PC caret away from the draft, so the diff has to restart. */
+  const handleCaretKey = (key: string) => {
+    handleKey(key);
+    resetDraft();
+  };
+
+  /**
+   * Expanding focuses the field, which is what summons the phone's keyboard —
+   * it has to happen inside the tap, so the input stays mounted while collapsed.
+   */
   const toggleKeyboard = () => {
     triggerHaptic('selection');
-    setKeyboardOpen((open) => !open);
-  };
-
-  const keyClass = (extra = '') =>
-    `h-9 flex-1 min-w-0 rounded-md glass-btn flex items-center justify-center text-[13px] font-medium text-slate-200 ${extra}`;
-
-  /** Keys fire on pointerdown: typing should feel immediate, like the trackpad. */
-  const pressHandler = (action: () => void) => (event: React.PointerEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    action();
+    if (keyboardOpen) {
+      inputRef.current?.blur();
+      setKeyboardOpen(false);
+      return;
+    }
+    setKeyboardOpen(true);
+    inputRef.current?.focus();
   };
 
   return (
     <aside
+      style={isKeyboard && keyboardInset > 0 ? { transform: `translateY(-${keyboardInset}px)` } : undefined}
       className={`relative flex flex-col bg-dark-900/95 border-t landscape:border-t-0 landscape:border-l border-white/10 p-2 select-none overflow-hidden transition-all w-full landscape:h-full ${
-        collapsed ? 'h-11' : isKeyboard ? 'h-auto max-h-[75vh]' : 'h-44'
+        collapsed ? 'h-14' : isKeyboard ? 'h-auto max-h-[75vh]' : 'h-44'
       }`}
     >
       {/* Mini Title & Close Bar — the title doubles as the keyboard accordion */}
@@ -145,14 +180,32 @@ export const CompanionWidget: React.FC<CompanionWidgetProps> = ({
         }`}
       >
         {isKeyboard ? (
-          <button
-            onClick={toggleKeyboard}
-            className="flex flex-1 items-center gap-1.5 text-left text-slate-400 active:text-white"
-            title={keyboardOpen ? 'Minimize keyboard' : 'Expand keyboard'}
-          >
-            {keyboardOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-            <span className="text-[10px] font-bold uppercase tracking-wider">⌨️ Keyboard & Hotkeys</span>
-          </button>
+          <form onSubmit={handleDraftSubmit} className="flex flex-1 items-center gap-1.5 min-w-0">
+            <button
+              type="button"
+              onClick={toggleKeyboard}
+              className="w-6 h-6 flex-shrink-0 flex items-center justify-center rounded text-slate-400 active:bg-white/10 active:text-white"
+              title={keyboardOpen ? 'Minimize keyboard' : 'Expand keyboard'}
+            >
+              {keyboardOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+            </button>
+            {/* Tapping this is what raises the phone's own keyboard. */}
+            <input
+              ref={inputRef}
+              type="text"
+              value={draft}
+              onChange={(event) => handleDraftChange(event.target.value)}
+              onFocus={() => setKeyboardOpen(true)}
+              enterKeyHint="enter"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="Tap to type — keys go straight to the PC"
+              aria-label="Send keystrokes to the PC"
+              className="flex-1 min-w-0 h-8 px-2.5 rounded-lg bg-dark-850 border border-white/10 text-[13px] text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
+            />
+          </form>
         ) : (
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
             {module === 'media' && '🎵 Quick Media Dock'}
@@ -271,7 +324,7 @@ export const CompanionWidget: React.FC<CompanionWidgetProps> = ({
         </div>
       )}
 
-      {/* Module: Keyboard — hotkeys, arrows, and the full QWERTY */}
+      {/* Module: Keyboard — the phone's own keyboard types into the field above */}
       {isKeyboard && keyboardOpen && (
         <div className="flex flex-col flex-1 min-h-0 gap-1.5 overflow-y-auto">
           <div className="grid grid-cols-4 gap-1.5">
@@ -295,109 +348,38 @@ export const CompanionWidget: React.FC<CompanionWidgetProps> = ({
 
           <div className="flex items-center justify-between gap-1.5">
             <div className="flex gap-1">
-              <button onClick={() => handleKey('backspace')} className="h-8 px-2.5 rounded-lg glass-btn text-rose-300 text-xs font-semibold flex items-center gap-1">
+              <button
+                onClick={handleBackspace}
+                className="h-8 px-2.5 rounded-lg glass-btn text-rose-300 text-xs font-semibold flex items-center gap-1"
+                title="Backspace"
+              >
                 <Delete className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => handleKey('enter')} className="h-8 px-2.5 rounded-lg glass-btn text-emerald-300 text-xs font-semibold flex items-center gap-1">
+              <button
+                onClick={() => {
+                  handleKey('enter');
+                  resetDraft();
+                }}
+                className="h-8 px-2.5 rounded-lg glass-btn text-emerald-300 text-xs font-semibold flex items-center gap-1"
+                title="Enter"
+              >
                 <CornerDownLeft className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* Arrows */}
+            {/* Arrows — these move the PC caret, so each one restarts the draft */}
             <div className="flex items-center gap-1">
-              <button onClick={() => handleKey('left')} className="w-8 h-8 rounded-lg glass-btn flex items-center justify-center text-slate-300">
+              <button onClick={() => handleCaretKey('left')} className="w-8 h-8 rounded-lg glass-btn flex items-center justify-center text-slate-300">
                 <ArrowLeft className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => handleKey('up')} className="w-8 h-8 rounded-lg glass-btn flex items-center justify-center text-slate-300">
+              <button onClick={() => handleCaretKey('up')} className="w-8 h-8 rounded-lg glass-btn flex items-center justify-center text-slate-300">
                 <ArrowUp className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => handleKey('down')} className="w-8 h-8 rounded-lg glass-btn flex items-center justify-center text-slate-300">
+              <button onClick={() => handleCaretKey('down')} className="w-8 h-8 rounded-lg glass-btn flex items-center justify-center text-slate-300">
                 <ArrowDown className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => handleKey('right')} className="w-8 h-8 rounded-lg glass-btn flex items-center justify-center text-slate-300">
+              <button onClick={() => handleCaretKey('right')} className="w-8 h-8 rounded-lg glass-btn flex items-center justify-center text-slate-300">
                 <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Full QWERTY — the reason the dock needs an accordion */}
-          <div className="flex flex-col gap-1 pt-1.5 border-t border-white/5">
-            {(symbols ? SYMBOL_ROWS : LETTER_ROWS).slice(0, 2).map((row, rowIndex) => (
-              <div key={row.join('')} className={`flex gap-1 ${rowIndex === 1 ? 'px-[4%]' : ''}`}>
-                {row.map((char) => (
-                  <button
-                    key={char}
-                    onPointerDown={pressHandler(() => handleCharKey(char))}
-                    className={keyClass()}
-                  >
-                    {shift === 'off' ? char : char.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            ))}
-
-            <div className="flex gap-1">
-              {!symbols && (
-                <button
-                  onPointerDown={pressHandler(handleShiftKey)}
-                  className={keyClass(
-                    shift === 'lock'
-                      ? 'bg-brand-600 text-white'
-                      : shift === 'once'
-                        ? 'bg-brand-600/40 text-white'
-                        : 'text-slate-400'
-                  )}
-                  title={shift === 'lock' ? 'Caps locked — tap to release' : 'Shift — double-tap to lock'}
-                >
-                  {shift === 'lock' ? '⇪' : '⇧'}
-                </button>
-              )}
-              {(symbols ? SYMBOL_ROWS : LETTER_ROWS)[2].map((char) => (
-                <button
-                  key={char}
-                  onPointerDown={pressHandler(() => handleCharKey(char))}
-                  className={keyClass()}
-                >
-                  {shift === 'off' ? char : char.toUpperCase()}
-                </button>
-              ))}
-              <button
-                onPointerDown={pressHandler(() => handleKey('backspace'))}
-                className={keyClass('text-rose-300')}
-                title="Backspace"
-              >
-                <Delete className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex gap-1">
-              <button
-                onPointerDown={pressHandler(() => {
-                  triggerHaptic('selection');
-                  setSymbols((on) => !on);
-                })}
-                className={keyClass('flex-[1.4] text-[11px] font-bold text-brand-300')}
-              >
-                {symbols ? 'ABC' : '?123'}
-              </button>
-              <button onPointerDown={pressHandler(() => handleCharKey(','))} className={keyClass()}>
-                ,
-              </button>
-              <button
-                onPointerDown={pressHandler(() => handleCharKey(' '))}
-                className={keyClass('flex-[4] text-[10px] uppercase tracking-wider text-slate-500')}
-              >
-                space
-              </button>
-              <button onPointerDown={pressHandler(() => handleCharKey('.'))} className={keyClass()}>
-                .
-              </button>
-              <button
-                onPointerDown={pressHandler(() => handleKey('enter'))}
-                className={keyClass('flex-[1.4] bg-brand-600/80 text-white')}
-                title="Enter"
-              >
-                <CornerDownLeft className="w-4 h-4" />
               </button>
             </div>
           </div>
